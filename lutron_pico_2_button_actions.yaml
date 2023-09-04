@@ -1,0 +1,155 @@
+blueprint:
+  name: Lutron Pico 2 Button Actions
+  description: Configurable actions for short, long, and double press of either button on a Lutron PicoRemote, 2 button version
+  domain: automation
+  input:
+    pico_id:
+      name: Lutron PicoRemote
+      description: An Entity for one of the buttons on the PicoRemote we want to configure
+      selector:
+        device:
+          model: PJ2-2B-GXX-X01 (Pico2Button)
+          multiple: false
+    on_short_click_action:
+      name: On Button Short Click Action
+      description: The action(s) to take after one short click of the On button
+      default: []
+      selector:
+        action: {}
+    on_long_click_action:
+      name: On Button Long Click Action
+      description: The action(s) to take after one long click of the On button
+      default: []
+      selector:
+        action: {}
+    on_double_click_action:
+      name: On Button Double Click Action
+      description: The action(s) to take after two short clicks of the On button
+      default: []
+      selector:
+        action: {}
+    off_short_click_action:
+      name: Off Button Short Click Action
+      description: The action(s) to take after one short click of the Off button
+      default: []
+      selector:
+        action: {}
+    off_long_click_action:
+      name: Off Button Long Click Action
+      description: The action(s) to take after one long click of the Off button
+      default: []
+      selector:
+        action: {}
+    off_double_click_action:
+      name: Off Button Double Click Action
+      description: The action(s) to take after two short clicks of the Off button
+      default: []
+      selector:
+        action: {}
+    define_short:
+      name: Short To Long Threshold
+      description: How long the button has to be held before it is considered a long click
+      default: 1000
+      selector:
+        number:
+          min: 500
+          max: 4000
+          unit_of_measurement: milliseconds
+          step: 1
+          mode: slider
+    double_timeout:
+      name: Double Timeout
+      description: How long to wait after the end of the first click for a second click
+      default: 250
+      selector:
+        number:
+          min: 100
+          max: 1000
+          unit_of_measurement: milliseconds
+          step: 1
+          mode: slider
+trigger:
+  - platform: device
+    domain: lutron_caseta
+    device_id: !input pico_id
+    type: press
+    subtype: 'on'
+    id: on_pressed
+  - platform: device
+    domain: lutron_caseta
+    device_id: !input pico_id
+    type: press
+    subtype: 'off'
+    id: off_pressed
+action:
+  - variables:
+      define_short_inner: !input define_short
+      double_timeout_inner: !input double_timeout
+      pico_id: "{{ trigger.event.data.device_id }}"
+      button_name: "{{ trigger.event.data.button_type }}"
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: on_pressed
+      sequence:
+      - wait_for_trigger:
+          - platform: device
+            domain: lutron_caseta
+            device_id: !input pico_id
+            type: release
+            subtype: "on"
+        timeout:
+          milliseconds: "{{ define_short_inner }}"
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger == none }}"
+          sequence: !input on_long_click_action
+        default:
+          - wait_for_trigger:
+              - platform: device
+                device_id: !input pico_id
+                domain: lutron_caseta
+                type: press
+                subtype: "on"
+            timeout:
+              milliseconds: "{{ double_timeout_inner }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ wait.trigger == none }}"
+                sequence: !input on_short_click_action
+            default: !input on_double_click_action
+    - conditions:
+      - condition: trigger
+        id: off_pressed
+      sequence:
+      - wait_for_trigger:
+          - platform: device
+            domain: lutron_caseta
+            device_id: !input pico_id
+            type: release
+            subtype: "off"
+        timeout:
+          milliseconds: "{{ define_short_inner }}"
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ wait.trigger == none }}"
+          sequence: !input off_long_click_action
+        default:
+          - wait_for_trigger:
+              - platform: device
+                device_id: !input pico_id
+                domain: lutron_caseta
+                type: press
+                subtype: "off"
+            timeout:
+              milliseconds: "{{ double_timeout_inner }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ wait.trigger == none }}"
+                sequence: !input off_short_click_action
+            default: !input off_double_click_action
+mode: single
